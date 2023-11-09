@@ -118,6 +118,45 @@ const getHash = (source: BinaryLike, maxLength?: number): string => {
   return typeof maxLength === "number" ? hash.slice(0, maxLength) : hash;
 };
 
+function collectCssFiles(viteManifest: ViteManifest, entryKey: string) {
+  invariant(
+    viteManifest[entryKey],
+    `Key "${entryKey}" not found in Vite manifest`
+  );
+
+  let cssFiles: string[] = [];
+  let processedKeys = new Set<string>();
+
+  function walk(key: string) {
+    if (processedKeys.has(key)) {
+      return;
+    }
+
+    let chunk = viteManifest[key];
+
+    // Walk imports first so CSS files follow import order
+    if (chunk.imports) {
+      for (let importKey of chunk.imports) {
+        walk(importKey);
+      }
+    }
+
+    if (chunk.css) {
+      for (let cssFile of chunk.css) {
+        if (!cssFiles.includes(cssFile)) {
+          cssFiles.push(cssFile);
+        }
+      }
+    }
+
+    processedKeys.add(key);
+  }
+
+  walk(entryKey);
+
+  return cssFiles;
+}
+
 const resolveBuildAssetPaths = (
   pluginConfig: ResolvedRemixVitePluginConfig,
   manifest: ViteManifest,
@@ -127,28 +166,27 @@ const resolveBuildAssetPaths = (
     pluginConfig.rootDirectory,
     absoluteFilePath
   );
-  let manifestKey = normalizePath(rootRelativeFilePath);
-  let manifestEntry = manifest[manifestKey];
+  let entryKey = normalizePath(rootRelativeFilePath);
+  let chunk = manifest[entryKey];
 
-  if (!manifestEntry) {
+  if (!chunk) {
     let knownManifestKeys = Object.keys(manifest)
       .map((key) => '"' + key + '"')
       .join(", ");
     throw new Error(
-      `No manifest entry found for "${manifestKey}". Known manifest keys: ${knownManifestKeys}`
+      `No manifest entry found for "${entryKey}". Known manifest keys: ${knownManifestKeys}`
     );
   }
 
   return {
-    module: `${pluginConfig.publicPath}${manifestEntry.file}`,
+    module: `${pluginConfig.publicPath}${chunk.file}`,
     imports:
-      manifestEntry.imports?.map((imported) => {
+      chunk.imports?.map((imported) => {
         return `${pluginConfig.publicPath}${manifest[imported].file}`;
       }) ?? [],
-    css:
-      manifestEntry.css?.map((href) => {
-        return `${pluginConfig.publicPath}${href}`;
-      }) ?? [],
+    css: collectCssFiles(manifest, entryKey).map((href) => {
+      return `${pluginConfig.publicPath}${href}`;
+    }),
   };
 };
 

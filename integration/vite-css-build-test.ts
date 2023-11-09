@@ -31,9 +31,81 @@ test.describe("Vite CSS build", () => {
             plugins: [remix()],
           });
         `,
+
+        "app/components/SharedCssTest/BundledStyles/BundledStyles.tsx": js`
+          import "./BundledStyles.css";
+          
+          export const BundledStyles = ({ children }) => {
+            return <div data-css-bundled className="BundledStyles">{children}</div>;
+          }
+        `,
+        "app/components/SharedCssTest/BundledStyles/BundledStyles.css": css`
+          .BundledStyles {
+            background: papayawhip;
+            padding: ${TEST_PADDING_VALUE};
+          }
+        `,
+
+        "app/components/SharedCssTest/LinkedStyles/LinkedStyles.tsx": js`
+          import href from "./LinkedStyles.css?url";
+          
+          export const links = [{ rel: "stylesheet", href }];
+
+          export const LinkedStyles = ({ children }) => {
+            return <div data-css-linked className="LinkedStyles">{children}</div>;
+          }
+        `,
+        "app/components/SharedCssTest/LinkedStyles/LinkedStyles.css": css`
+          .LinkedStyles {
+            background: salmon;
+            padding: ${TEST_PADDING_VALUE};
+          }
+        `,
+
+        "app/components/SharedCssTest/CssModuleStyles/CssModuleStyles.tsx": js`
+          import styles from "./CssModuleStyles.module.css";
+          
+          export const CssModuleStyles = ({ children }) => {
+            return <div data-css-modules className={styles.CssModuleStyles}>{children}</div>;
+          }
+        `,
+        "app/components/SharedCssTest/CssModuleStyles/CssModuleStyles.module.css": css`
+          .CssModuleStyles {
+            background: peachpuff;
+            padding: ${TEST_PADDING_VALUE};
+          }
+        `,
+
+        "app/components/SharedCssTest/SharedCssTest.tsx": js`
+          import { BundledStyles } from "./BundledStyles/BundledStyles";
+          import { LinkedStyles, links as linkedStylesLinks } from "./LinkedStyles/LinkedStyles";
+          import { CssModuleStyles } from "./CssModuleStyles/CssModuleStyles";
+
+          export const links = linkedStylesLinks;
+
+          export const SharedCssTest = ({ routeName }) => {
+            if (!routeName) throw new Error("routeName prop is required on SharedCssTest");
+
+            return (
+              <CssModuleStyles>
+                <LinkedStyles>
+                  <BundledStyles>
+                    <h2>Shared CSS Test (Used in "{routeName}" route)</h2>
+                  </BundledStyles>
+                </LinkedStyles>
+              </CssModuleStyles>
+            );
+          }
+        `,
+
         "app/root.tsx": js`
           import { Links, Meta, Outlet, Scripts } from "@remix-run/react";
-
+          import { SharedCssTest, links as sharedCssTestLinks } from "./components/SharedCssTest/SharedCssTest";
+          
+          export function links() {
+            return sharedCssTestLinks;
+          }
+          
           export default function Root() {
             return (
               <html lang="en">
@@ -42,52 +114,27 @@ test.describe("Vite CSS build", () => {
                   <Links />
                 </head>
                 <body>
-                  <div id="content">
-                    <Outlet />
+                  <div id="root">
+                    <SharedCssTest routeName="root" />
                   </div>
+                  <Outlet />
                   <Scripts />
                 </body>
               </html>
             );
           }
         `,
-        "app/routes/_index/styles-bundled.css": css`
-          .index_bundled {
-            background: papayawhip;
-            padding: ${TEST_PADDING_VALUE};
-          }
-        `,
-        "app/routes/_index/styles-linked.css": css`
-          .index_linked {
-            background: mintcream;
-            padding: ${TEST_PADDING_VALUE};
-          }
-        `,
-        "app/routes/_index/styles.module.css": css`
-          .index {
-            background: peachpuff;
-            padding: ${TEST_PADDING_VALUE};
-          }
-        `,
         "app/routes/_index/route.tsx": js`
-          import "./styles-bundled.css";
-          import linkedStyles from "./styles-linked.css?url";
-          import cssModulesStyles from "./styles.module.css";
+          import { SharedCssTest, links as sharedCssTestLinks } from "../../components/SharedCssTest/SharedCssTest";
 
           export function links() {
-            return [{ rel: "stylesheet", href: linkedStyles }];
+            return sharedCssTestLinks;
           }
 
           export default function IndexRoute() {
             return (
               <div id="index">
-                <div data-css-modules className={cssModulesStyles.index}>
-                  <div data-css-linked className="index_linked">
-                    <div data-css-bundled className="index_bundled">
-                      <h2>CSS test</h2>
-                    </div>
-                  </div>
-                </div>
+                <SharedCssTest routeName="index" />
               </div>
             );
           }
@@ -105,6 +152,20 @@ test.describe("Vite CSS build", () => {
   test("renders styles", async ({ page }) => {
     let app = new PlaywrightFixture(appFixture, page);
     await app.goto("/");
+
+    await expect(page.locator("#root [data-css-modules]")).toHaveCSS(
+      "padding",
+      TEST_PADDING_VALUE
+    );
+    await expect(page.locator("#root [data-css-linked]")).toHaveCSS(
+      "padding",
+      TEST_PADDING_VALUE
+    );
+    await expect(page.locator("#root [data-css-bundled]")).toHaveCSS(
+      "padding",
+      TEST_PADDING_VALUE
+    );
+
     await expect(page.locator("#index [data-css-modules]")).toHaveCSS(
       "padding",
       TEST_PADDING_VALUE
