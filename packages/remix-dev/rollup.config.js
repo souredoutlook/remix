@@ -1,4 +1,5 @@
 const path = require("node:path");
+const json = require("@rollup/plugin-json").default;
 const babel = require("@rollup/plugin-babel").default;
 const nodeResolve = require("@rollup/plugin-node-resolve").default;
 const copy = require("rollup-plugin-copy");
@@ -42,6 +43,7 @@ module.exports = function rollup() {
           exclude: /node_modules/,
           extensions: [".ts"],
         }),
+        json(),
         nodeResolve({ extensions: [".ts"] }),
         copy({
           targets: [
